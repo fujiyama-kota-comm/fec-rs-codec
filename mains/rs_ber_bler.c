@@ -2,14 +2,19 @@
  * @file rs_ber_bler.c
  * @brief Reed–Solomon BER/BLER simulation over AWGN (BPSK, hard decision).
  *
- * Output:
- *   results/rs_ber_data.csv   (EbN0_dB, BER_RS, BER_bpsk)
- *   results/rs_bler_data.csv  (EbN0_dB, BLER_RS, BLER_bpsk)
+ * This program evaluates the BER (bit error rate) and BLER (block error rate)
+ * performance of a systematic shortened RS(N,K) code over the AWGN channel
+ * using BPSK modulation and hard-decision demodulation.
+ *
+ * Output (with parameters auto-embedded in filenames):
+ *   results/rs_ber_m<M>_N<N>_K<K>_data.csv
+ *   results/rs_bler_m<M>_N<N>_K<K>_data.csv
  *
  * Assumptions:
- *   - RS code over GF(2^m)
- *   - Bit-interleaved BPSK over AWGN
- *   - Hard-decision demodulation → RS hard-decoder
+ *   - RS code is over GF(2^m)
+ *   - BPSK: 0 → -1, 1 → +1
+ *   - Hard decision before RS decoding
+ *   - Uses the shortened RS model internally through rs_decode()
  *
  * Required API:
  *   void rs_gf_init(int m, int N, int K, int T);
@@ -37,19 +42,19 @@
 #define PI 3.141592653589793
 
 /* ------------------------------------------------------------------------- */
-/* Simulation parameters                                                     */
+/* Simulation parameters                                                      */
 /* ------------------------------------------------------------------------- */
-static const int RS_M = 8;   /* GF(2^m) */
-static const int RS_N = 255; /* codeword length (symbols)   */
-static const int RS_K = 223; /* information length (symbols)*/
+static const int RS_M = 8;   /* GF(2^m)                                 */
+static const int RS_N = 255; /* Codeword length (symbols)               */
+static const int RS_K = 223; /* Information length (symbols)            */
 
-static const int N_TRIALS = 100000; /* frames per SNR              */
+static const int N_TRIALS = 100000; /* Frames per SNR point              */
 static const double EbN0_MIN_dB = 0.0;
 static const double EbN0_MAX_dB = 14.0;
 static const double EbN0_STEP_dB = 0.5;
 
 /* ------------------------------------------------------------------------- */
-/* Utility: Gaussian random (Box–Muller)                                     */
+/* Utilities: Gaussian noise (Box–Muller)                                     */
 /* ------------------------------------------------------------------------- */
 static double rand_uniform(void) { return (rand() + 1.0) / (RAND_MAX + 2.0); }
 
@@ -60,14 +65,14 @@ static double randn(void) {
 }
 
 /* ------------------------------------------------------------------------- */
-/* BPSK theoretical BER: BER = 0.5 * erfc( sqrt(Eb/N0) )                     */
+/* Theoretical BPSK BER                                                      */
 /* ------------------------------------------------------------------------- */
 static double bpsk_ber(double EbN0_linear) {
   return 0.5 * erfc(sqrt(EbN0_linear));
 }
 
 /* ======================================================================== */
-/* MAIN                                                                     */
+/* MAIN                                                                      */
 /* ======================================================================== */
 int main(void) {
 
@@ -78,35 +83,52 @@ int main(void) {
   int m = RS_M;
   int N = RS_N;
   int K = RS_K;
-  int T = N - K; /* parity symbols */
+  int T = N - K;
+
   int code_bits_len = N * m;
   int info_bits_len = K * m;
 
   printf("RS parameters:\n");
   printf("  GF(2^m) : m = %d\n", m);
-  printf("  Code    : RS(%d, %d), parity symbols T = %d\n", N, K, T);
+  printf("  Code    : RS(%d, %d), T = %d parity symbols\n", N, K, T);
   printf("  Trials  : %d frames per SNR point\n\n", N_TRIALS);
 
+  /* Initialize GF(2^m) and generator polynomial */
   if (rs_gf_init(m, N, K, T) != 0) {
     fprintf(stderr, "rs_gf_init failed.\n");
     return 1;
   }
 
+  /* ---------------------------------------------------------------------
+   * Prepare result directory
+   * ------------------------------------------------------------------- */
 #ifdef _WIN32
   _mkdir("results");
 #else
   mkdir("results", 0777);
 #endif
 
-  FILE *fp = fopen("results/rs_ber_data.csv", "w");
-  FILE *fp_bler = fopen("results/rs_bler_data.csv", "w");
+  /* ---------------------------------------------------------------------
+   * Construct output file names with parameters m,N,K
+   * ------------------------------------------------------------------- */
+  char fname_ber[256];
+  char fname_bler[256];
+  sprintf(fname_ber, "results/rs_ber_m%d_N%d_K%d_data.csv", m, N, K);
+  sprintf(fname_bler, "results/rs_bler_m%d_N%d_K%d_data.csv", m, N, K);
+
+  FILE *fp = fopen(fname_ber, "w");
+  FILE *fp_bler = fopen(fname_bler, "w");
   if (!fp || !fp_bler) {
     fprintf(stderr, "Cannot open results CSV files\n");
     return 1;
   }
+
   fprintf(fp, "EbN0_dB,BER_RS,BER_bpsk\n");
   fprintf(fp_bler, "EbN0_dB,BLER_RS,BLER_bpsk\n");
 
+  /* ---------------------------------------------------------------------
+   * Allocate buffers
+   * ------------------------------------------------------------------- */
   int *u_bits = (int *)malloc(info_bits_len * sizeof(int));
   int *c_bits = (int *)malloc(code_bits_len * sizeof(int));
   int *r_bits = (int *)malloc(code_bits_len * sizeof(int));
@@ -124,6 +146,9 @@ int main(void) {
 
   printf("EbN0_dB, BER_RS, BER_bpsk, BLER_RS, BLER_bpsk\n");
 
+  /* ====================================================================
+   * SNR Loop
+   * ================================================================== */
   for (double EbN0_dB = EbN0_MIN_dB; EbN0_dB <= EbN0_MAX_dB + 1e-9;
        EbN0_dB += EbN0_STEP_dB) {
 
@@ -136,48 +161,52 @@ int main(void) {
     long long err_info = 0;
     long long sum_frame_errors = 0;
 
+    /* ===============================================================
+     * Monte Carlo trials per SNR
+     * ============================================================= */
     for (int t = 0; t < N_TRIALS; t++) {
-      for (int i = 0; i < info_bits_len; i++) {
-        u_bits[i] = rand() & 1;
-      }
 
+      /* Generate random info bits */
+      for (int i = 0; i < info_bits_len; i++)
+        u_bits[i] = rand() & 1;
+
+      /* Encode */
       rs_encode(u_bits, c_bits);
 
-      for (int i = 0; i < code_bits_len; i++) {
+      /* BPSK: 1 → +1, 0 → -1 */
+      for (int i = 0; i < code_bits_len; i++)
         tx[i] = (c_bits[i] == 1) ? +1.0 : -1.0;
-      }
 
-      for (int i = 0; i < code_bits_len; i++) {
-        double n = sigma * randn();
-        rx[i] = tx[i] + n;
-      }
+      /* Add AWGN */
+      for (int i = 0; i < code_bits_len; i++)
+        rx[i] = tx[i] + sigma * randn();
 
-      for (int i = 0; i < code_bits_len; i++) {
+      /* Hard decision */
+      for (int i = 0; i < code_bits_len; i++)
         r_bits[i] = (rx[i] >= 0) ? 1 : 0;
-      }
 
+      /* Decode */
       rs_decode(r_bits, c_hat, u_hat);
 
+      /* Count bit errors */
       int info_err_bits = 0;
-      for (int i = 0; i < info_bits_len; i++) {
+      for (int i = 0; i < info_bits_len; i++)
         if (u_bits[i] != u_hat[i])
           info_err_bits++;
-      }
-      err_info += info_err_bits;
 
-      int fer = (info_err_bits > 0);
-      sum_frame_errors += fer;
+      err_info += info_err_bits;
+      sum_frame_errors += (info_err_bits > 0);
     }
 
+    /* BER & BLER results */
     double BER_RS = (double)err_info / (double)total_info_bits;
     double BER_BPSK = bpsk_ber(EbN0);
     double BLER_RS = (double)sum_frame_errors / (double)N_TRIALS;
-
-    /* BPSK BLER 理論値 (符号語長 N*m ビット基準) */
     double BLER_BPSK = 1.0 - pow(1.0 - BER_BPSK, code_bits_len);
 
     printf("%4.1f, %.10e, %.10e, %.10e, %.10e\n", EbN0_dB, BER_RS, BER_BPSK,
            BLER_RS, BLER_BPSK);
+
     fprintf(fp, "%4.1f,%.10e,%.10e\n", EbN0_dB, BER_RS, BER_BPSK);
     fprintf(fp_bler, "%4.1f,%.10e,%.10e\n", EbN0_dB, BLER_RS, BLER_BPSK);
   }
@@ -193,7 +222,7 @@ int main(void) {
   free(tx);
   free(rx);
 
-  printf("\nResults saved to results/rs_ber_data.csv and "
-         "results/rs_bler_data.csv\n");
+  printf("\nResults saved to:\n  %s\n  %s\n", fname_ber, fname_bler);
+
   return 0;
 }

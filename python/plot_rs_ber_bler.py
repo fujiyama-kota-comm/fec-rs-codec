@@ -1,35 +1,61 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import re
 
 # =============================================================================
 #  Plot BER/BLER Curves for Reed–Solomon over AWGN (BPSK)
 # =============================================================================
 
-# ▼ 出力フォルダ（images/）が無い場合は自動作成
 os.makedirs("images", exist_ok=True)
 
 # =============================================================================
-#  Matplotlib フォント設定（論文向け）
+#  Matplotlib font settings
 # =============================================================================
 plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["mathtext.fontset"] = "stix"
 plt.rcParams["font.size"] = 14
 
 # =============================================================================
-#  1) Load BER CSV data
+#  Extract m, N, K from file name
 # =============================================================================
-df_ber = pd.read_csv("results/rs_ber_data.csv")
+
+
+def extract_params(filename):
+    """
+    Filename example:
+        rs_ber_m8_N255_K223.csv
+    """
+    pattern = r"m(\d+)_N(\d+)_K(\d+)"
+    match = re.search(pattern, filename)
+    if match:
+        m, N, K = match.groups()
+        return int(m), int(N), int(K)
+    return None, None, None
+
+
+# =============================================================================
+#  Load BER CSV
+# =============================================================================
+
+ber_files = [f for f in os.listdir("results") if f.startswith("rs_ber")]
+if len(ber_files) == 0:
+    raise FileNotFoundError("No rs_ber_m*_N*_K*.csv found in results/")
+
+ber_file = os.path.join("results", ber_files[0])
+m, N, K = extract_params(ber_file)
+
+df_ber = pd.read_csv(ber_file)
 EbN0 = df_ber["EbN0_dB"]
 ber_rs = df_ber["BER_RS"]
 ber_bpsk = df_ber["BER_bpsk"]
 
 # =============================================================================
-#  2) Plot BER graph
+#  BER Plot
 # =============================================================================
+
 plt.figure(figsize=(7.5, 6))
 
-# --- RS-coded BPSK
 plt.semilogy(
     EbN0,
     ber_rs,
@@ -39,10 +65,9 @@ plt.semilogy(
     markeredgewidth=1.8,
     linewidth=2.5,
     color="g",
-    label="Reed-Solomon BPSK",
+    label=f"RS({N},{K}) coded BPSK",
 )
 
-# --- Uncoded BPSK
 plt.semilogy(
     EbN0,
     ber_bpsk,
@@ -56,29 +81,50 @@ plt.xlabel("Eb/N0 [dB]", fontsize=18)
 plt.ylabel("Bit Error Rate (BER)", fontsize=18)
 plt.grid(True, which="both", linestyle="--", linewidth=0.6, alpha=0.6)
 plt.legend(fontsize=14, loc="upper right", frameon=True, edgecolor="black")
-plt.tight_layout()
 
-# --- Save BER figure
+# ---- Annotation: only m ----
+plt.annotate(
+    f"m={m}",
+    xy=(0.97, 0.03),
+    xycoords="axes fraction",
+    ha="right",
+    va="bottom",
+    fontsize=12,
+    bbox=dict(
+        boxstyle="round,pad=0.35",
+        edgecolor="black",
+        facecolor="white",
+        alpha=0.85,
+    ),
+)
+
+plt.tight_layout()
 plt.savefig("images/rs_ber_graph.png", dpi=300, bbox_inches="tight")
 plt.savefig("images/rs_ber_graph.svg", dpi=300, bbox_inches="tight")
-
 plt.show()
 
 
 # =============================================================================
-#  3) Load BLER CSV data
+#  Load BLER CSV
 # =============================================================================
-df_bler = pd.read_csv("results/rs_bler_data.csv")
+
+bler_files = [f for f in os.listdir("results") if f.startswith("rs_bler")]
+if len(bler_files) == 0:
+    raise FileNotFoundError("No rs_bler_m*_N*_K*.csv found in results/")
+
+bler_file = os.path.join("results", bler_files[0])
+df_bler = pd.read_csv(bler_file)
+
 EbN0_b = df_bler["EbN0_dB"]
 bler_rs = df_bler["BLER_RS"]
-bler_bpsk = df_bler["BLER_bpsk"]  # 必要なら BPSK の理論BLER列を作っても良い
+bler_bpsk = df_bler["BLER_bpsk"]
 
 # =============================================================================
-#  4) Plot BLER graph
+#  BLER Plot
 # =============================================================================
+
 plt.figure(figsize=(7.5, 6))
 
-# --- RS-coded BPSK
 plt.semilogy(
     EbN0_b,
     bler_rs,
@@ -88,10 +134,9 @@ plt.semilogy(
     markeredgewidth=1.8,
     linewidth=2.5,
     color="g",
-    label="Reed-Solomon BPSK",
+    label=f"RS({N},{K}) coded BPSK",
 )
 
-# --- Uncoded BPSK
 plt.semilogy(
     EbN0_b,
     bler_bpsk,
@@ -105,10 +150,24 @@ plt.xlabel("Eb/N0 [dB]", fontsize=18)
 plt.ylabel("Block Error Rate (BLER)", fontsize=18)
 plt.grid(True, which="both", linestyle="--", linewidth=0.6, alpha=0.6)
 plt.legend(fontsize=14, loc="upper right", frameon=True, edgecolor="black")
-plt.tight_layout()
 
-# --- Save BLER figure
+# ---- Annotation: only m ----
+plt.annotate(
+    f"m={m}",
+    xy=(0.97, 0.03),
+    xycoords="axes fraction",
+    ha="right",
+    va="bottom",
+    fontsize=12,
+    bbox=dict(
+        boxstyle="round,pad=0.35",
+        edgecolor="black",
+        facecolor="white",
+        alpha=0.85,
+    ),
+)
+
+plt.tight_layout()
 plt.savefig("images/rs_bler_graph.png", dpi=300, bbox_inches="tight")
 plt.savefig("images/rs_bler_graph.svg", dpi=300, bbox_inches="tight")
-
 plt.show()

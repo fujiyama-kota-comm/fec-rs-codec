@@ -1,46 +1,50 @@
-# fec-nsc-codec
+# fec-rs-codec
 
-![Build](https://github.com/fujiyama-kota-comm/fec-nsc-codec/actions/workflows/c-cpp.yml/badge.svg)
+![Build](https://github.com/fujiyama-kota-comm/fec-rs-codec/actions/workflows/c-cpp.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/github/v/tag/fujiyama-kota-comm/fec-nsc-codec)
+![Version](https://img.shields.io/github/v/tag/fujiyama-kota-comm/fec-rs-codec)
 
-C implementation of **Non-Systematic Convolutional Codes (NSC)** with **Viterbi decoding**
-for Forward Error Correction (FEC).
-Supports **hard-decision** and **soft-decision (LLR)** decoding.
+A clean and modular Reed–Solomon Codec implementation
+supporting GF(2^m) arithmetic, shortened RS(N,K),
+systematic encoding, and Berlekamp–Massey decoding
+with AWGN BER/BLER simulation (BPSK, hard decision).
 
 ---
 
 ## 📘 Overview
 
-This repository provides a lightweight and modular implementation of
-**Non-Systematic Convolutional (NSC) Codes**, including:
+This repository provides a standalone C implementation of
+**Reed–Solomon Forward Error Correction (RS-FEC)** suitable for:
 
-- Rate-1/2 convolutional encoder
-- 4-state trellis (constraint length 3)
-- Hard/soft Viterbi decoder
-- Branchless trellis-based implementation
-- BER simulation under AWGN
+- Wireless communication (5G/6G, DVB, optical, satellite)
+- Storage (CD/DVD, RAID, QR codes)
+- Embedded systems and firmware
+- Error-correcting code education and research
 
-Designed for:
+Included components:
 
-- FEC research
-- Wireless communication (5G/6G)
-- Embedded systems
-- Error-control coding education
+- GF(2^m) arithmetic: log/exp tables, multiplication, division, inversion
+- Generator polynomial construction (any m, N, K, T)
+- Systematic RS encoder
+- Berlekamp–Massey algorithm (error locator)
+- Chien search (error position search)
+- Forney algorithm–based error magnitude solving
+- Shortened RS support (arbitrary N ≤ 2^m − 1)
+- AWGN BER/BLER simulation (BPSK, hard decision)
 
 ---
 
 ## 📁 Project Structure
 
 ```
-fec-nsc-codec
-├── src/                 # Encoder/decoder core implementation
+fec-rs-codec
+├── src/                 # GF arithmetic, encoder, decoder core
 ├── include/             # Public header files
-├── mains/               # Test programs & BER simulation
-├── results/             # Generated BER results
-├── images/              # BER plots and diagrams
-├── python/              # Plotting scripts
-├── .github/workflows/   # CI pipeline (GCC build)
+├── mains/               # BER/BLER simulation (AWGN+BPSK)
+├── results/             # Generated BER & BLER CSV
+├── images/              # Plots generated from Python
+├── python/              # Plotting scripts (BER/BLER visualization)
+├── .github/workflows/   # CI pipeline (GCC/Clang)
 ├── Makefile             # Build rules
 └── README.md            # This document
 ```
@@ -49,26 +53,44 @@ fec-nsc-codec
 
 ## 📑 Features
 
-### ✔ NSC Encoder (Rate 1/2)
-- Trellis table–based generation
-- Forced termination (tail bits)
-- Branchless implementation
+### ✔ Reed–Solomon Codec
 
-### ✔ Viterbi Decoder
-- Hard-decision Viterbi (Hamming metric)
-- Soft-decision Viterbi (LLR metric)
-- Full traceback implementation
-- Trellis defined in `trellis.h`
+- Supports any GF(2^m) up to **m ≤ 8**
+- Arbitrary shortened RS(N,K)
+- Efficient **log/exp–based** multiplication/division
+- Automatic generator polynomial construction (G(x))
+- Systematic encoding
+- Full decoding chain:
+  - Syndrome computation
+  - Berlekamp–Massey
+  - Chien search
+  - Error magnitude solving (Forney)
+  - Codeword correction on parent RS length
 
-### ✔ AWGN BER Simulation
-The program `mains/nsc_ber.c` evaluates BER vs Eb/N0
-for both hard- and soft-decision decoding.
+### ✔ AWGN BER/BLER Simulation
+
+The program `mains/rs_ber_bler.c` evaluates:
+
+- **BER** (Bit Error Rate)
+- **BLER** (Block Error Rate)
+
+under BPSK modulation and hard-decision demodulation.
+
+Output format (auto-named using m,N,K):
+
+```
+results/rs_ber_m8_N255_K223.csv
+results/rs_bler_m8_N255_K223.csv
+```
+
+Python scripts automatically visualize performance.
 
 ---
 
 ## 🛠 Build Instructions
 
 ### Requirements
+
 - GCC or Clang
 - `make`
 - Linux / macOS / WSL / MinGW
@@ -84,7 +106,7 @@ make
 Generated binary:
 
 ```
-nsc_ber   # BER simulation program
+rs_ber_bler   # BER/BLER simulation
 ```
 
 Clean build:
@@ -97,26 +119,36 @@ make clean
 
 ## 🚀 Usage Example
 
-Run BER simulation:
+Run BER/BLER simulation:
 
 ```sh
-./nsc_ber
+./rs_ber_bler
 ```
 
-Example BER result (CSV):
+Output files:
 
 ```
-results/nsc_ber_data.csv
+results/rs_ber_m8_N255_K223.csv
+results/rs_bler_m8_N255_K223.csv
+```
+
+Plot results:
+
+```sh
+python python/plot_rs_ber_bler.py
 ```
 
 ---
 
-## 📉 BER Performance
+## 📉 BER/BLER Performance
 
-Example BER curve for rate-1/2 NSC
-(4-state Viterbi, AWGN, BPSK):
+Example BER graph for **RS(255,223), GF(2^8)** (BPSK, AWGN):
 
-![BER curve](images/nsc_ber_graph.png)
+![BER graph](images/rs_ber_graph.png)
+
+Example BLER graph:
+
+![BLER graph](images/rs_bler_graph.png)
 
 ---
 
@@ -125,21 +157,26 @@ Example BER curve for rate-1/2 NSC
 ### src/
 | File | Description |
 |------|-------------|
-| `nsc_encoder.c` | NSC encoder implementation |
-| `nsc_decoder.c` | Hard & soft Viterbi decoder |
-| `trellis.c` | Next-state & output tables |
+| `rs_gf.c` | GF(2^m) operations, generator polynomial |
+| `rs_encoder.c` | Systematic RS encoder |
+| `rs_decoder.c` | BM + Chien search + Forney RS decoder |
 
 ### include/
 | File | Description |
 |------|-------------|
-| `nsc_encoder.h` | Encoder API |
-| `nsc_decoder.h` | Decoder API |
-| `trellis.h` | Trellis constants |
+| `rs_gf.h` | GF arithmetic API |
+| `rs_encoder.h` | Encoder API |
+| `rs_decoder.h` | Decoder API |
 
 ### mains/
 | File | Description |
 |------|-------------|
-| `nsc_ber.c` | BER simulation under AWGN |
+| `rs_ber_bler.c` | AWGN BER/BLER simulation program |
+
+### python/
+| File | Description |
+|------|-------------|
+| `plot_rs_ber_bler.py` | Plot BER/BLER graphs |
 
 ---
 
@@ -155,7 +192,7 @@ internship, or NDA-protected source is used.
 ## 📜 License
 
 This project is licensed under the **MIT License**.
-You may use it for research, education, and commercial applications.
+It is free for research, education, and commercial use.
 
 ---
 
@@ -168,7 +205,8 @@ For major changes, please open an issue first.
 
 ## ⭐ Acknowledgements
 
-Developed as part of research in
+Developed as part of research on
 **Forward Error Correction (FEC)** and **physical-layer communications**.
 
-If this repository is useful, please consider giving it a ⭐ on GitHub!
+If you find this repository helpful,
+please consider giving it a ⭐ on GitHub!
