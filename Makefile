@@ -20,20 +20,26 @@ OBJ = $(SRC:.c=.o)
 TEST_SRC = mains/rs_ber_bler.c
 TEST_OBJ = $(TEST_SRC:.c=.o)
 
+TEST2_SRC = mains/test.c
+TEST2_OBJ = $(TEST2_SRC:.c=.o)
+
 BIN_DIR = bin
 TARGET_NAME = rs_ber_bler
+TARGET2_NAME = test
 
 # OS によって拡張子を切り替え
 ifeq ($(OS),Windows_NT)
     TARGET = $(BIN_DIR)/$(TARGET_NAME).exe
+    TARGET2 = $(BIN_DIR)/$(TARGET2_NAME).exe
 else
     TARGET = $(BIN_DIR)/$(TARGET_NAME)
+    TARGET2 = $(BIN_DIR)/$(TARGET2_NAME)
 endif
 
 # ============================================================
 #  Default build target
 # ============================================================
-all: $(TARGET)
+all: $(TARGET) $(TARGET2)
 
 # Create bin/ directory (Linux + macOS + Windows WSL 対応)
 $(BIN_DIR):
@@ -45,6 +51,10 @@ $(BIN_DIR):
 $(TARGET): $(BIN_DIR) $(OBJ) $(TEST_OBJ)
 	$(CC) $(CFLAGS) -o $@ $(OBJ) $(TEST_OBJ) $(LDFLAGS)
 
+# Link
+$(TARGET2): $(BIN_DIR) $(OBJ) $(TEST2_OBJ)
+	$(CC) $(CFLAGS) -o $@ $(OBJ) $(TEST2_OBJ) $(LDFLAGS)
+
 # Compile
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -52,8 +62,9 @@ $(TARGET): $(BIN_DIR) $(OBJ) $(TEST_OBJ)
 # ============================================================
 #  Run
 # ============================================================
-run: $(TARGET)
+run: $(TARGET) $(TARGET2)
 	./$(TARGET)
+	./$(TARGET2)
 
 # ============================================================
 #  Clean (Windows + Linux/macOS 完全対応)

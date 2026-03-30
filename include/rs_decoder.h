@@ -35,6 +35,6 @@
  *   - This function performs full RS error correction.
  *   - Outputs are given in bit form (LSB-first ordering per symbol).
  */
-void rs_decode(const int *recv_bits, int *code_bits, int *info_bits);
+int rs_decode(const int *recv_bits, int *code_bits, int *info_bits);
 
 #endif /* RS_DECODER_H */

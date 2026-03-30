@@ -89,7 +89,7 @@ static int berlekamp_massey(const uint16_t *S, uint16_t *sigma_out) {
   int m_shift = 1;
   uint16_t bbb = 1;
 
-  for (int n = 0; n < T; n++) {
+  for (int n = 0; n < T - 1; n++) {
     uint16_t d = S[n];
     for (int i = 1; i <= L; i++)
       d ^= rs_gf_mul(C[i], S[n - i]);
@@ -263,7 +263,7 @@ static void correct_errors(uint16_t *recv_sym_p, const uint16_t *S,
  *       code_bits : Ns symbols
  *       info_bits : first K symbols
  * ------------------------------------------------------------------------- */
-void rs_decode(const int *recv_bits, int *code_bits, int *info_bits) {
+int rs_decode(const int *recv_bits, int *code_bits, int *info_bits) {
   int m = rs_m;
   int Ns = rs_N;
   int Np = rs_Np;
@@ -271,6 +271,7 @@ void rs_decode(const int *recv_bits, int *code_bits, int *info_bits) {
   int K = rs_K;
   int T = rs_T;
   int t = T / 2;
+  int count = 0;
 
   /* Build parent-length buffer */
   uint16_t recv_sym_p[Np];
@@ -302,7 +303,7 @@ void rs_decode(const int *recv_bits, int *code_bits, int *info_bits) {
 
     /* Chien search */
     int error_pos[t];
-    int count = chien_search(sigma, L, error_pos);
+    count = chien_search(sigma, L, error_pos);
 
     /* Correct */
     if (count > 0 && count <= t)
@@ -316,4 +317,6 @@ void rs_decode(const int *recv_bits, int *code_bits, int *info_bits) {
   /* Output K information symbols */
   for (int i = 0; i < K; i++)
     symbol_to_bits(recv_sym_p[S + i], &info_bits[i * m], m);
+
+  return count;
 }
